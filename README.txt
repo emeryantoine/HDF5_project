@@ -1,6 +1,25 @@
-Bonjour,
+Voici mon rendu de projet GLCS
 
-Pour compiler le projet, il suffit de taper make
-Pour l'executer : make run
-make test lancera la code sur seulement 4 iteration et montera tout ce qui est contenu dans les dataset via un h5dump
+les makefile contient les fonctiond necessaires à la compilation des 2 version du projet.
 
+make heat
+	pour compiler la premiere version dans plusieurs fichiers
+make run
+	pour executer cette premiere version
+make show
+	pour afficher les fichiers hdf5 de sortie
+
+make heat2
+	pour compiler la 2eme version avec l'ecriture en parallèle
+make run2
+	pour executer cette 2eme version
+make show2
+	pour afficher le contenu du "heat.h5"
+
+
+nettoyage :
+
+make clean
+	pour supprimer les .o
+make clean+
+	pour supprimer les .o, executables et les fichiers .h5

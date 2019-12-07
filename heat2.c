@@ -6,7 +6,6 @@
 
 //include the hdf5 library
 #include <hdf5.h>
-#define RANK 2
 
 //my custom API for the HDF5 library
 hid_t create_file(char* filename)
@@ -17,7 +16,7 @@ hid_t create_file(char* filename)
 hid_t create_space(int x, int y)
 {
 	hsize_t dimspace[] = {x, y};
-	return H5Screate_simple (RANK, dimspace, NULL); 
+	return H5Screate_simple (2, dimspace, NULL); 
 }
 
 hid_t create_dataset(hid_t file, char* step, hid_t dataspace)
@@ -208,42 +207,60 @@ int main( int argc, char* argv[] )
 	double(*next)[dsize[1]] = malloc(sizeof(double)*dsize[1]*dsize[0]);
 
 	//create filename to output the data
-	char filename[42];
-	sprintf(filename, "heat%dx%d.h5", pcoord[0], pcoord[1]);
+	char filename[] = "heat.h5";
 	//printf("%s\n", filename);
-	
-	//create the file and in each of them a data space
-	hid_t file_id = create_file(filename);
-	//hsize_t dimspace[] = {dsize[0], dsize[1]};
-	hid_t mem_dataspace = create_space(dsize[0], dsize[1]);
-	hid_t dataspace_f = create_space(50, 50);
+
+	//Set up file access property list with parallel I/O access
+	hid_t plist_id = H5Pcreate(H5P_FILE_ACCESS);
+	H5Pset_fapl_mpio(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL);
+
+	//Create a new file collectively and release property list identifier
+	hid_t file_id = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
+	H5Pclose(plist_id);
+
+	//Create the dataspace for the dataset
+	hsize_t dim[] = {(dsize[0]-2)*2, (dsize[1]-2)*2};
+	hsize_t chunk_dim[] = {dsize[0], dsize[1]};
+	hid_t filespace = H5Screate_simple(2, dim, NULL); 
+    hid_t memspace  = H5Screate_simple(2, chunk_dim, NULL);
+
+    //create hyperslab
+    hsize_t start[] = {1, 1};
+	hsize_t stop[] = {dsize[0]-2, dsize[1]-2};
+	hid_t status_hyperslab = H5Sselect_hyperslab(memspace, H5S_SELECT_SET, start, NULL, stop, NULL);	
+
+    //Each process defines dataset in memory and writes it to the hyperslab in the file
+    hsize_t start2[2], size2[2];
+    start2[0] = (dsize[0]-2)*pcoord[0];
+    start2[1] = (dsize[1]-2)*pcoord[1];
+    size2[0] =  dsize[0] - 2;
+    size2[1] = dsize[1]-2;
 
 
-	//EXO 2 : using hyperslab to remove ghosts
-	hsize_t start[] = {1, 1};
-	hsize_t count[] = {50, 50};
-	hid_t status_hyperslab = H5Sselect_hyperslab(mem_dataspace, H5S_SELECT_SET, start, NULL, count, NULL);
-
-	char step[42];
-	hid_t dataset;
-	herr_t status;
-
+    char step[42];
+    hid_t dset_id;
+    herr_t status;
 	// the main (time) iteration
 	for (int ii=0; ii<nb_iter; ++ii) {
-		//create the step name and dataset to save a dataset at each iteration
+
+		//Create chunked dataset
 		sprintf(step, "/step%d", ii);
-		dataset = create_dataset(file_id, step, dataspace_f);
-		
+		plist_id = H5Pcreate(H5P_DATASET_CREATE);
+    	H5Pset_chunk(plist_id, 2, chunk_dim);
+    	dset_id = H5Dcreate(file_id, step, H5T_NATIVE_DOUBLE, filespace, H5P_DEFAULT, plist_id, H5P_DEFAULT);
+	    H5Pclose(plist_id);
+    	H5Sclose(filespace);
 
-		//EXO 1 with ghosts
-		//status = H5Dwrite (dataset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, cur);
-		
-		//EXO 2 without ghosts
-		status = H5Dwrite(dataset, H5T_NATIVE_DOUBLE, mem_dataspace, dataspace_f, H5P_DEFAULT, cur);
-		
+    	//Select hyperslab in the file
+    	filespace = H5Dget_space(dset_id);
+	    status = H5Sselect_hyperslab(filespace, H5S_SELECT_SET, start2, NULL, size2, NULL);
 
-		//close the dataset
-    	H5Dclose(dataset);
+	    //Create property list for collective dataset write
+	    plist_id = H5Pcreate(H5P_DATASET_XFER);
+	    H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
+	    
+	    //status = H5Dwrite(dset_id, H5T_NATIVE_DOUBLE, memspace, filespace, plist_id, cur);
+	    status = H5Dwrite(dset_id, H5T_NATIVE_DOUBLE, memspace, filespace, H5P_DEFAULT, cur);
 		
 		// compute the temperature at the next iteration
 		iter(dsize, cur, next);
@@ -257,24 +274,30 @@ int main( int argc, char* argv[] )
 
 	//save the last value, at step = max+1
 	sprintf(step, "/step%d", nb_iter);
-	dataset = create_dataset(file_id, step, dataspace_f);
-	
+	plist_id = H5Pcreate(H5P_DATASET_CREATE);
+	H5Pset_chunk(plist_id, 2, chunk_dim);
+	dset_id = H5Dcreate(file_id, step, H5T_NATIVE_DOUBLE, filespace, H5P_DEFAULT, plist_id, H5P_DEFAULT);
+    H5Pclose(plist_id);
+	H5Sclose(filespace);
 
-	//EXO 1 with ghosts
-	//status = H5Dwrite (dataset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, cur);
-	
-	//EXO 2 without ghosts
-	status = H5Dwrite(dataset, H5T_NATIVE_DOUBLE, mem_dataspace, dataspace_f, H5P_DEFAULT, cur);
-	
+	//Select hyperslab in the file
+	filespace = H5Dget_space(dset_id);
+    status = H5Sselect_hyperslab(filespace, H5S_SELECT_SET, start2, NULL, size2, NULL);
 
-	//close the dataset
-	H5Dclose(dataset);
+    //Create property list for collective dataset write
+    plist_id = H5Pcreate(H5P_DATASET_XFER);
+    H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
+    
+    status = H5Dwrite(dset_id, H5T_NATIVE_DOUBLE, memspace, filespace, H5P_DEFAULT, cur);
 
+/*
 	//close dataspace and file
-	H5Sclose(dataspace_f);
-	H5Sclose(mem_dataspace);
-	H5Fclose(file_id);
-	
+	H5Dclose(dset_id);
+    H5Sclose(filespace);
+    H5Sclose(memspace);
+    H5Pclose(plist_id);
+    H5Fclose(file_id);
+*/
 	// free memory
 	free(cur);
 	free(next);

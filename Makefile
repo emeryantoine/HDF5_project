@@ -2,6 +2,9 @@ EXEC=heat
 EXEC2=heat2
 CC=h5pcc
 CFLAGS=-W -Wall -Werror -ansi -pedantic
+width=100
+height=400
+step=10
 
 
 $(EXEC2):$(EXEC2).c
@@ -12,10 +15,10 @@ $(EXEC):$(EXEC).c
 	$(CC) -o $@ $^
 
 run:
-	mpirun -n 4 ./$(EXEC) 100 100 100
+	mpirun -n 4 ./$(EXEC) $(step) $(width) $(height)
 
 run2:
-	mpirun -n 4 ./$(EXEC2) 100 100 100
+	mpirun -n 4 ./$(EXEC2) $(step) $(width) $(height)
 
 show:
 	echo "dump 0 0"

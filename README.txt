@@ -16,6 +16,8 @@ make run2
 make show2
 	pour afficher le contenu du "heat.h5"
 
+Dans le make file, il y a des valeurs width, height et step definit au debut qui peuvent etre changées pour differents usages.
+
 
 nettoyage :
 

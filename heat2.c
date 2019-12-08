@@ -134,6 +134,9 @@ void exchange(MPI_Comm cart_comm, int dsize[2], double cur[dsize[0]][dsize[1]])
  * @param[out] dsize	 size of the local data block (including ghost zones)
  * @param[out] cart_comm a MPI Cartesian communicator including all processes arranged in grid
  */
+
+int nproc;
+
 void parse_args( int argc, char *argv[], int *nb_iter, int dsize[2], MPI_Comm *cart_comm )
 {
 	if ( argc != 4 ) {
@@ -144,6 +147,7 @@ void parse_args( int argc, char *argv[], int *nb_iter, int dsize[2], MPI_Comm *c
 	// total number of processes
 	int comm_size; MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 	int psize[2];
+	nproc = comm_size;
 	
 	// number of processes in the x dimension
 	psize[0] = sqrt(comm_size);
@@ -219,7 +223,7 @@ int main( int argc, char* argv[] )
 	H5Pclose(plist_id);
 
 	//Create the dataspace for the dataset
-	hsize_t dim[] = {(dsize[0]-2)*2, (dsize[1]-2)*2};
+	hsize_t dim[] = {(dsize[0]-2)*sqrt(nproc), (dsize[1]-2)*sqrt(nproc)};
 	hsize_t chunk_dim[] = {dsize[0], dsize[1]};
 	hid_t filespace = H5Screate_simple(2, dim, NULL); 
     hid_t memspace  = H5Screate_simple(2, chunk_dim, NULL);

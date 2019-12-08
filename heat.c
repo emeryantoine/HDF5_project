@@ -216,12 +216,12 @@ int main( int argc, char* argv[] )
 	hid_t file_id = create_file(filename);
 	//hsize_t dimspace[] = {dsize[0], dsize[1]};
 	hid_t mem_dataspace = create_space(dsize[0], dsize[1]);
-	hid_t dataspace_f = create_space(50, 50);
+	hid_t dataspace_f = create_space(dsize[0]-2, dsize[1]-2);
 
 
 	//EXO 2 : using hyperslab to remove ghosts
 	hsize_t start[] = {1, 1};
-	hsize_t count[] = {50, 50};
+	hsize_t count[] = {dsize[0]-2, dsize[1]-2};
 	hid_t status_hyperslab = H5Sselect_hyperslab(mem_dataspace, H5S_SELECT_SET, start, NULL, count, NULL);
 
 	char step[42];
